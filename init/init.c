@@ -569,7 +569,12 @@ static void import_kernel_nv(char *name, int in_qemu)
     if (value == 0) return;
     *value++ = 0;
     if (*name == 0) return;
-    int add_to_kernel_cmdline = 1; /* add by default */
+
+    int add_to_kernel_cmdline = 0;
+#if TARGET_IS_GALAXYS
+    int add_to_kernel_cmdline = 1;
+#endif
+
     if (!in_qemu)
     {
         /* on a real device, white-list the kernel options */
