@@ -60,6 +60,7 @@ static char baseband[32];
 static char carrier[32];
 static char bootloader[32];
 static char hardware[32];
+static char kernel_bootmode[32];
 static unsigned revision = 0;
 static char qemu[32];
 static struct input_keychord *keychords = 0;
@@ -592,7 +593,7 @@ static void import_kernel_nv(char *name, int in_qemu)
                 emmc_boot = 1;
             }
         } else if (!strcmp(name,"bootmode")) {
-            strlcpy(bootmode, value, sizeof(bootmode));
+            strlcpy(kernel_bootmode, value, sizeof(kernel_bootmode));
         } else {
             qemu_cmdline(name, value);
         }
@@ -865,13 +866,13 @@ int main(int argc, char **argv)
     import_kernel_cmdline(0);
 
     INFO("reading config file\n");
-    if (!strcmp(bootmode, "1")) {
+    if (!strcmp(kernel_bootmode, "1")) {
         parse_config_file("/factorytest.rc");
-    } else if (!strcmp(bootmode, "2")) {
+    } else if (!strcmp(kernel_bootmode, "2")) {
         parse_config_file("/recovery.rc");
-    } else if (!strcmp(bootmode, "3")) {
+    } else if (!strcmp(kernel_bootmode, "3")) {
         parse_config_file("/fota.rc");
-    } else if (!strcmp(bootmode, "4")) {
+    } else if (!strcmp(kernel_bootmode, "4")) {
         parse_config_file("/lpm.rc");
     } else {
         parse_config_file("/init.rc");
