@@ -61,6 +61,7 @@ static char carrier[32];
 static char bootloader[32];
 static char hardware[32];
 static char kernel_bootmode[32];
+static char kernel_cmdline[1024];
 static unsigned revision = 0;
 static char qemu[32];
 static struct input_keychord *keychords = 0;
@@ -568,7 +569,7 @@ static void import_kernel_nv(char *name, int in_qemu)
     if (value == 0) return;
     *value++ = 0;
     if (*name == 0) return;
-
+    int add_to_kernel_cmdline = 1; /* add by default */
     if (!in_qemu)
     {
         /* on a real device, white-list the kernel options */
@@ -594,9 +595,15 @@ static void import_kernel_nv(char *name, int in_qemu)
             }
         } else if (!strcmp(name,"bootmode")) {
             strlcpy(kernel_bootmode, value, sizeof(kernel_bootmode));
+            add_to_kernel_cmdline = 0;
         } else {
             qemu_cmdline(name, value);
         }
+
+        if (add_to_kernel_cmdline) {
+            sprintf(kernel_cmdline, "%s=%s ", name, value);
+        }
+        
     } else {
         /* in the emulator, export any kernel option with the
          * ro.kernel. prefix */
@@ -628,6 +635,7 @@ static void import_kernel_cmdline(int in_qemu)
         cmdline[0] = 0;
     }
 
+    memset(kernel_cmdline, 0, sizeof(kernel_cmdline));
     ptr = cmdline;
     while (ptr && *ptr) {
         char *x = strchr(ptr, ' ');
@@ -636,7 +644,15 @@ static void import_kernel_cmdline(int in_qemu)
         ptr = x;
     }
 
-        /* don't expose the raw commandline to nonpriv processes */
+    /* now that we have read the cmdline, rewrite it, taking off any args we don't want to keep */
+    fd = open("/proc/cmdline", O_WRONLY|O_CREAT);
+    if (fd >= 0) {
+        int n = write(fd, kernel_cmdline, strlen(kernel_cmdline));
+        close(fd);
+        sync(); /* for good measure */
+    }
+
+    /* don't expose the raw commandline to nonpriv processes */
     chmod("/proc/cmdline", 0440);
 }
 
