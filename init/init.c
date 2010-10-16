@@ -591,6 +591,8 @@ static void import_kernel_nv(char *name, int in_qemu)
             if (!strcmp(value,"true")) {
                 emmc_boot = 1;
             }
+        } else if (!strcmp(name,"bootmode")) {
+            strlcpy(bootmode, value, sizeof(bootmode));
         } else {
             qemu_cmdline(name, value);
         }
@@ -858,12 +860,23 @@ int main(int argc, char **argv)
     open_devnull_stdio();
     log_init();
     
-    INFO("reading config file\n");
-    parse_config_file("/init.rc");
-
     /* pull the kernel commandline and ramdisk properties file in */
     qemu_init();
     import_kernel_cmdline(0);
+
+    INFO("reading config file\n");
+    if (!strcmp(bootmode, "1")) {
+        parse_config_file("/factorytest.rc");
+    } else if (!strcmp(bootmode, "2")) {
+        parse_config_file("/recovery.rc");
+    } else if (!strcmp(bootmode, "3")) {
+        parse_config_file("/fota.rc");
+    } else if (!strcmp(bootmode, "4")) {
+        parse_config_file("/lpm.rc");
+    } else {
+        parse_config_file("/init.rc");
+    }
+
 
     get_hardware_name();
     snprintf(tmp, sizeof(tmp), "/init.%s.rc", hardware);
