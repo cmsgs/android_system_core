@@ -129,17 +129,21 @@ static struct perms_ devperms[] = {
     { "/dev/pmem_camera",   0660,   AID_SYSTEM,     AID_CAMERA,     1 },
     { "/dev/pmem_smipool",  0660,   AID_SYSTEM,     AID_CAMERA,     1 },
     { "/dev/pmem_venc",     0660,   AID_SYSTEM,     AID_AUDIO,      1 },
-    { "/dev/pmem_gpu1",     0660,   AID_SYSTEM,     AID_GRAPHICS,   1 },
-    { "/dev/oncrpc/",       0660,   AID_ROOT,       AID_SYSTEM,     1 },
+    { "/dev/oncrpc/",       0660,   AID_RADIO,       AID_SYSTEM,     1 },
     { "/dev/adsp/",         0660,   AID_SYSTEM,     AID_AUDIO,      1 },
     { "/dev/snd/",          0660,   AID_SYSTEM,     AID_AUDIO,      1 },
     { "/dev/mt9t013",       0660,   AID_SYSTEM,     AID_SYSTEM,     0 },
+#ifndef NO_MSM_CAMDIR
     { "/dev/msm_camera/",   0660,   AID_SYSTEM,     AID_SYSTEM,     1 },
+#else
+    { "/dev/msm_camera",    0660,   AID_SYSTEM,     AID_SYSTEM,     0 },
+#endif
     { "/dev/akm8976_daemon",0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/akm8976_aot",   0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/akm8973_daemon",0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/akm8973_aot",   0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/bma150",        0640,   AID_COMPASS,    AID_SYSTEM,     0 },
+    { "/dev/bma020",        0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/cm3602",        0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/akm8976_pffd",  0640,   AID_COMPASS,    AID_SYSTEM,     0 },
     { "/dev/lightsensor",   0640,   AID_SYSTEM,     AID_SYSTEM,     0 },
@@ -224,6 +228,9 @@ static struct perms_ devperms[] = {
     { "/dev/block/bml12",   0666,   AID_RADIO,     AID_ROOT,        0 },
 #endif
 
+    { "/dev/smdcntl0",          0640,   AID_RADIO,      AID_RADIO,      0 },
+    { "/dev/smdcntl1",          0640,   AID_RADIO,      AID_RADIO,      0 },
+    { "/dev/smdcntl2",          0640,   AID_RADIO,      AID_RADIO,      0 },
     { NULL, 0, 0, 0, 0 },
 };
 
@@ -501,9 +508,11 @@ static void handle_device_event(struct uevent *uevent)
         } else if (!strncmp(uevent->subsystem, "adsp", 4)) {
             base = "/dev/adsp/";
             mkdir(base, 0755);
+#ifndef NO_MSM_CAMDIR
         } else if (!strncmp(uevent->subsystem, "msm_camera", 10)) {
             base = "/dev/msm_camera/";
             mkdir(base, 0755);
+#endif
         } else if(!strncmp(uevent->subsystem, "input", 5)) {
             base = "/dev/input/";
             mkdir(base, 0755);
@@ -546,8 +555,6 @@ static int load_firmware(int fw_fd, int loading_fd, int data_fd)
         return -1;
     len_to_copy = st.st_size;
 
-    write(loading_fd, "1", 1);  /* start transfer */
-
     while (len_to_copy > 0) {
         char buf[PAGE_SIZE];
         ssize_t nr;
@@ -574,11 +581,6 @@ static int load_firmware(int fw_fd, int loading_fd, int data_fd)
     }
 
 out:
-    if(!ret)
-        write(loading_fd, "0", 1);  /* successful end of transfer */
-    else
-        write(loading_fd, "-1", 2); /* abort transfer */
-
     return ret;
 }
 
@@ -610,18 +612,27 @@ static void process_firmware_event(struct uevent *uevent)
     if(loading_fd < 0)
         goto file_free_out;
 
+    write(loading_fd, "1", 1);  /* start transfer */
+
     data_fd = open(data, O_WRONLY);
-    if(data_fd < 0)
+    if(data_fd < 0) {
+        write(loading_fd, "-1", 2); /* abort transfer */
         goto loading_close_out;
+    }
 
     fw_fd = open(file, O_RDONLY);
-    if(fw_fd < 0)
+    if(fw_fd < 0) {
+        write(loading_fd, "-1", 2); /* abort transfer */
         goto data_close_out;
+    }
 
-    if(!load_firmware(fw_fd, loading_fd, data_fd))
+    if(!load_firmware(fw_fd, loading_fd, data_fd)) {
+        write(loading_fd, "0", 1);  /* successful end of transfer */
         log_event_print("firmware copy success { '%s', '%s' }\n", root, file);
-    else
+    } else {
+        write(loading_fd, "-1", 2); /* abort transfer */
         log_event_print("firmware copy failure { '%s', '%s' }\n", root, file);
+    }
 
     close(fw_fd);
 data_close_out:
